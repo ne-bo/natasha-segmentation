@@ -20,6 +20,7 @@ class BaseTrainer:
         self.metrics = metrics
         self.name = config['name']
         self.epochs = config['trainer']['epochs']
+        print('self.epochs ', self.epochs)
         self.save_freq = config['trainer']['save_freq']
         self.verbosity = config['trainer']['verbosity']
         self.with_cuda = config['cuda'] and torch.cuda.is_available()
@@ -59,6 +60,9 @@ class BaseTrainer:
         """
         Full training logic
         """
+        print('self.start_epoch ', self.start_epoch)
+        print('self.epochs + 1 ', self.epochs + 1)
+
         for epoch in range(self.start_epoch, self.epochs + 1):
             result = self._train_epoch(epoch)
             log = {'epoch': epoch}

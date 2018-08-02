@@ -3,12 +3,12 @@
     "cuda": true,
     "gpu": 0,
     "data_loader": {
-        "data_dir_test": "/media/natasha/Data1/salt/test/images/",
-        "data_dir_train": "/media/natasha/Data1/salt/train/images/",
-        "train_masks_csv": "/media/natasha/Data1/salt/train.csv",
-        "depths_csv": "/media/natasha/Data1/salt/depths.csv",
-        "sample_submission_csv": "/media/natasha/Data1/salt/sample_submission.csv",
-        "batch_size_train": 8,
+        "data_dir_test": "/home/natasha/salt/test/images/",
+        "data_dir_train": "/home/natasha/salt/train/images/",
+        "train_masks_csv": "/home/natasha/salt/train.csv",
+        "depths_csv": "/home/natasha/salt/depths.csv",
+        "sample_submission_csv": "/home/natasha/salt/sample_submission.csv",
+        "batch_size_train": 16,
         "batch_size_test": 16,
         "shuffle": true,
         "drop_last": false,
@@ -34,7 +34,7 @@
     "loss": "bce",
     "metrics": [],
     "trainer": {
-        "epochs": 30,
+        "epochs": 70,
         "save_dir": "saved/",
         "save_freq": 1,
         "verbosity": 2,
@@ -47,4 +47,5 @@
     },
     "temp_folder": "all_outputs/",
     "pack_volume": 25,
+    "with_depth": true
 }

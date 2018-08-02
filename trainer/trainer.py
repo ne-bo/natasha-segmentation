@@ -40,7 +40,13 @@ class Trainer(BaseTrainer):
             images = images.cuda()
             true_masks = true_masks.cuda()
 
-            masks_pred = self.model(images)
+            images_themselves = images[:, :3]
+            if self.config['with_depth']:
+               depths = images[:, 3]
+            else:
+                depths = None
+
+            masks_pred = self.model(images_themselves, depths)
             masks_probs = F.sigmoid(masks_pred)
             masks_probs_flat = masks_probs.view(-1)
             true_masks_flat = true_masks.view(-1)

@@ -45,8 +45,10 @@ class ImagesWithMasksDataset(Dataset):
 
         if self.name == 'train':
             image_with_depth_and_mask = random_crop(image_with_depth_and_mask)
+            image_with_depth_and_mask = flip_h_w(image_with_depth_and_mask, direction='horizontal')
+            image_with_depth_and_mask = flip_h_w(image_with_depth_and_mask, direction='vertical')
 
-        image_with_depth = image_with_depth_and_mask[:3] # NATASHA actually removed depth info
+        image_with_depth = image_with_depth_and_mask[:4]
         mask = image_with_depth_and_mask[-1]
         # print('image_with_depth ', image_with_depth.shape)
         # print('self.masks[index] ', mask, mask.shape)
@@ -99,33 +101,12 @@ class ImagesWithMasksDataset(Dataset):
             for i, row in tqdm(enumerate(rows_mask[1:])):
                 image_id = row[0]
                 images.append(os.path.join(self.config['data_loader']['data_dir_train'], image_id + '.png'))
-                mask = row[1]
                 depths[i] = self.all_depths[image_id] * depths[i]
 
-                # if mask != '':
-                #     mask = [int(number) for number in mask.split(' ')]
-                #     assert len(mask) % 2 == 0, 'Mask should contain only pairs of numbers'
-                #     for pair in range(len(mask) // 2):
-                #         a = mask[pair * 2]
-                #         b = mask[pair * 2 + 1]
-                #         masks[i] = self.mark_pixels(masks[i], a, b)
-
-                mask_from_image = np.array(Image.open(images[i].replace('images', 'masks')).convert('RGB'))[:, :, 1]/255.0
+                mask_from_image = np.array(Image.open(images[i].replace('images', 'masks')).convert('RGB'))[:, :,
+                                  1] / 255.0
                 masks[i] = mask_from_image
         return images, masks, depths
-
-    def mark_pixels(self, mask_i, a, b):
-        initial_shape = mask_i.shape
-        mask_i = mask_i.reshape(-1, 1)
-        mask_i[a:a + b] = 1.0
-        mask_i = mask_i.reshape(initial_shape)
-        return mask_i
-        # for i in range(mask_i.shape[0]):
-        #     for j in range(mask_i.shape[1]):
-        #         current_index = j * mask_i.shape[0] + i + 1
-        #         if a <= current_index < a + b:
-        #             mask_i[i, j] = 1.0
-        # return mask_i
 
 
 def random_crop(image_with_depth_and_mask, w=64, h=64):
@@ -136,3 +117,22 @@ def random_crop(image_with_depth_and_mask, w=64, h=64):
     x_start = np.random.randint(low=0, high=full_width - w)
     y_start = np.random.randint(low=0, high=full_height - h)
     return image_with_depth_and_mask[:, x_start:x_start + w, y_start:y_start + h]
+
+
+# https://github.com/pytorch/pytorch/issues/229
+def flip(x, dim):
+    indices = [slice(None)] * x.dim()
+    indices[dim] = torch.arange(x.size(dim) - 1, -1, -1,
+                                dtype=torch.long, device=x.device)
+    return x[tuple(indices)]
+
+
+def flip_h_w(image_with_depth_and_mask, direction='horizontal'):
+    coin = np.random.randint(low=0, high=100)
+    if coin > 50:
+        if direction == 'horizontal':
+            image_with_depth_and_mask = flip(image_with_depth_and_mask, dim=2)
+        if direction == 'vertical':
+            image_with_depth_and_mask = flip(image_with_depth_and_mask, dim=1)
+
+    return image_with_depth_and_mask

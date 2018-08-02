@@ -48,10 +48,19 @@ def save_inference_results_on_disk(loader, network, name):
     print('loader ', loader.batch_sampler.sampler)
     for data in tqdm(loader):
         images, true_masks = data
-        outputs_1 = network(Variable(images[:, :, :64,:64]).cuda())
-        outputs_2 = network(Variable(images[:, :, 37:,:64]).cuda())
-        outputs_3 = network(Variable(images[:, :, :64,37:]).cuda())
-        outputs_4 = network(Variable(images[:, :, 37:,37:]).cuda())
+
+        images = images.cuda()
+
+        images_themselves = images[:, :3]
+        if config['with_depth']:
+            depths = images[:, 3]
+        else:
+            depths = None
+
+        outputs_1 = network(images_themselves[:, :, :64,:64], depths)
+        outputs_2 = network(images_themselves[:, :, 37:,:64], depths)
+        outputs_3 = network(images_themselves[:, :, :64,37:], depths)
+        outputs_4 = network(images_themselves[:, :, 37:,37:], depths)
 
         outputs = torch.from_numpy(np.zeros((outputs_1.shape[0], outputs_1.shape[1], 101, 101))).float().cuda()
 
