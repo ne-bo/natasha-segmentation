@@ -8,6 +8,7 @@ from torch.autograd import Variable
 from tqdm import tqdm
 import torch.nn.functional as F
 
+from utils.crf import dense_crf
 from utils.util import rle_encode, RLenc
 
 
@@ -16,7 +17,7 @@ def outputs_for_large_dataset(loader, network):
     torch.cuda.empty_cache()
     name = loader.dataset.name
     batches_number = save_inference_results_on_disk(loader, network, name)
-    batches_number = 45
+    # batches_number = 45
     name = 'test'
     return read_inference_results_from_disk(config, batches_number, name)
 
@@ -76,7 +77,20 @@ def save_inference_results_on_disk(loader, network, name):
         outputs[:, :, 37:64, 37:64] /= 4.0
 
         outputs = F.sigmoid(outputs)
+
+        # something like smoothing with conditional random fields
+        if config['crf']:
+            for j, (output, image) in enumerate(zip(outputs, images_themselves)):
+                output = output.squeeze(dim=0)
+                # print('output before ', output.shape)
+                image = torch.transpose(image, dim0=0, dim1=2)
+                # print('image ', image.shape)
+                output = dense_crf(image.data.cpu().numpy().astype(np.uint8), output.data.cpu().numpy())
+                # print('output after', output)
+                outputs[j] = torch.from_numpy(output).float()
+
         all_outputs = torch.cat((all_outputs, outputs.data), dim=0)
+
         if i % pack_volume == 0:
             torch.save(all_outputs, '%sall_outputs_%d' % (path, i))
             all_outputs = torch.cuda.FloatTensor()

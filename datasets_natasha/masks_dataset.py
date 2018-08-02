@@ -46,7 +46,9 @@ class ImagesWithMasksDataset(Dataset):
         if self.name == 'train':
             image_with_depth_and_mask = random_crop(image_with_depth_and_mask)
             image_with_depth_and_mask = flip_h_w(image_with_depth_and_mask, direction='horizontal')
-            image_with_depth_and_mask = flip_h_w(image_with_depth_and_mask, direction='vertical')
+            # we should not use vertical flips because ofthe data'snature
+            # https://www.kaggle.com/c/tgs-salt-identification-challenge/discussion/61998
+            # image_with_depth_and_mask = flip_h_w(image_with_depth_and_mask, direction='vertical')
 
         image_with_depth = image_with_depth_and_mask[:4]
         mask = image_with_depth_and_mask[-1]

@@ -8,7 +8,7 @@
         "train_masks_csv": "/home/natasha/salt/train.csv",
         "depths_csv": "/home/natasha/salt/depths.csv",
         "sample_submission_csv": "/home/natasha/salt/sample_submission.csv",
-        "batch_size_train": 16,
+        "batch_size_train": 32,
         "batch_size_test": 16,
         "shuffle": true,
         "drop_last": false,
@@ -47,5 +47,6 @@
     },
     "temp_folder": "all_outputs/",
     "pack_volume": 25,
-    "with_depth": true
+    "with_depth": true,
+    "crf": true
 }
