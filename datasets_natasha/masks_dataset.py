@@ -16,15 +16,20 @@ class ImagesWithMasksDataset(Dataset):
         self.name = name
         self.config = config
         self.image_size = config['data_loader']['initial_image_size']
+        MEAN = [0.485, 0.456, 0.406]
+        STD = [0.229, 0.224, 0.225]
+
         if name == 'train':
             self.transform = transforms.Compose([
                 # transforms.Resize((self.image_size, self.image_size)),
                 transforms.ToTensor(),
+                transforms.Normalize(mean=MEAN, std=STD)
             ])
         else:
             self.transform = transforms.Compose([
                 # transforms.Resize((self.image_size, self.image_size)),
                 transforms.ToTensor(),
+                transforms.Normalize(mean=MEAN, std=STD)
             ])
 
         self.all_depths = {}
@@ -41,6 +46,7 @@ class ImagesWithMasksDataset(Dataset):
 
         mask = torch.from_numpy(self.masks[index]).float().unsqueeze(dim=0)
 
+        image_cumsum = torch.cumsum(image, dim=1)
         image_with_depth_and_mask = torch.cat((image, depth, mask), dim=0)
 
         if self.name == 'train':

@@ -108,23 +108,10 @@ def convert_output_to_rle(output):
     rle = RLenc(predicted[0].cpu().numpy(), order='F', format=True)
     return rle
 
-    #
-    # flattened_mask = np.zeros(predicted.shape).flatten()
-    # for j in range(predicted.shape[2]):
-    #     flattened_mask[predicted.shape[1] * j: predicted.shape[1] * (j + 1)] = predicted[:, :, j].squeeze(dim=0).cpu().numpy()
-    # try_rle = rle_encode(flattened_mask)
-    # # print('try_rle ', try_rle)
-    # #input()
-    # string_rle = ''
-    # for number in try_rle:
-    #     string_rle = string_rle + str(number) + ' '
-    # string_rle = string_rle.strip()
-    # # print('string_rle', string_rle)
-    # return string_rle
-
 
 def inference(loader, model):
     config = loader.config
+
     all_outputs = outputs_for_large_dataset(loader, model)
 
     all_ids = []
