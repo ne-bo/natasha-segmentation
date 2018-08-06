@@ -8,6 +8,7 @@ from torch.autograd import Variable
 from tqdm import tqdm
 import torch.nn.functional as F
 
+from datasets_natasha.masks_dataset import resize_image
 from utils.crf import dense_crf
 from utils.util import rle_encode, RLenc
 
@@ -58,23 +59,26 @@ def save_inference_results_on_disk(loader, network, name):
         else:
             depths = None
 
-        outputs_1 = network(images_themselves[:, :, :64,:64], depths)
-        outputs_2 = network(images_themselves[:, :, 37:,:64], depths)
-        outputs_3 = network(images_themselves[:, :, :64,37:], depths)
-        outputs_4 = network(images_themselves[:, :, 37:,37:], depths)
+        if config['resize_128']:
+            outputs = network(images_themselves, depths)
+        else:
+            outputs_1 = network(images_themselves[:, :, :64,:64], depths)
+            outputs_2 = network(images_themselves[:, :, 37:,:64], depths)
+            outputs_3 = network(images_themselves[:, :, :64,37:], depths)
+            outputs_4 = network(images_themselves[:, :, 37:,37:], depths)
 
-        outputs = torch.from_numpy(np.zeros((outputs_1.shape[0], outputs_1.shape[1], 101, 101))).float().cuda()
+            outputs = torch.from_numpy(np.zeros((outputs_1.shape[0], outputs_1.shape[1], 101, 101))).float().cuda()
 
-        outputs[:, :, :64,:64] += outputs_1
-        outputs[:, :, 37:,:64] += outputs_2
-        outputs[:, :, :64,37:] += outputs_3
-        outputs[:, :, 37:,37:] += outputs_4
+            outputs[:, :, :64,:64] += outputs_1
+            outputs[:, :, 37:,:64] += outputs_2
+            outputs[:, :, :64,37:] += outputs_3
+            outputs[:, :, 37:,37:] += outputs_4
 
-        outputs[:, :, 37:64, :37] /= 2.0
-        outputs[:, :, 37:64, 64:] /= 2.0
-        outputs[:, :, :37, 37:64] /= 2.0
-        outputs[:, :, 64:, 37:64] /= 2.0
-        outputs[:, :, 37:64, 37:64] /= 4.0
+            outputs[:, :, 37:64, :37] /= 2.0
+            outputs[:, :, 37:64, 64:] /= 2.0
+            outputs[:, :, :37, 37:64] /= 2.0
+            outputs[:, :, 64:, 37:64] /= 2.0
+            outputs[:, :, 37:64, 37:64] /= 4.0
 
         outputs = F.sigmoid(outputs)
 
@@ -88,6 +92,12 @@ def save_inference_results_on_disk(loader, network, name):
                 output = dense_crf(image.data.cpu().numpy().astype(np.uint8), output.data.cpu().numpy())
                 # print('output after', output)
                 outputs[j] = torch.from_numpy(output).float()
+
+        if config['resize_128']:
+            resized_outputs = np.zeros((outputs.shape[0], outputs.shape[1], 101, 101))
+            for j, output in enumerate(outputs):
+                resized_outputs[j] = resize_image(output.data.cpu().numpy(), (101, 101))
+            outputs = torch.from_numpy(resized_outputs).cuda().float()
 
         all_outputs = torch.cat((all_outputs, outputs.data), dim=0)
 

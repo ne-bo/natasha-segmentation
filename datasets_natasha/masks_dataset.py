@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torchvision.transforms as transforms
 from PIL import Image
+from skimage.transform import resize
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
@@ -25,12 +26,26 @@ class ImagesWithMasksDataset(Dataset):
                 transforms.ToTensor(),
                 transforms.Normalize(mean=MEAN, std=STD)
             ])
+
+            if self.config['resize_128']:
+                self.transform = transforms.Compose([
+                    transforms.Resize((128, 128)),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean=MEAN, std=STD)
+                ])
         else:
             self.transform = transforms.Compose([
                 # transforms.Resize((self.image_size, self.image_size)),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=MEAN, std=STD)
             ])
+
+            if self.config['resize_128']:
+                self.transform = transforms.Compose([
+                    transforms.Resize((128, 128)),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean=MEAN, std=STD)
+                ])
 
         self.all_depths = {}
         self.images, self.masks, self.depths = self.get_images_with_masks()
@@ -46,7 +61,7 @@ class ImagesWithMasksDataset(Dataset):
 
         mask = torch.from_numpy(self.masks[index]).float().unsqueeze(dim=0)
 
-        image_cumsum = torch.cumsum(image, dim=1)
+        # image_cumsum = torch.cumsum(image, dim=2)
         image_with_depth_and_mask = torch.cat((image, depth, mask), dim=0)
 
         if self.name == 'train':
@@ -88,6 +103,10 @@ class ImagesWithMasksDataset(Dataset):
             for i, row in tqdm(enumerate(rows[1:])):
                 images.append(row[0] + '.png')
         print('test images ', images)
+
+        if self.config['resize_128']:
+            self.image_size = 128
+
         depths = np.ones((len(images), self.image_size, self.image_size), dtype=float)
         for i, image in enumerate(images):
             image_id = image.replace(self.config['data_loader']['data_dir_test'], '').replace('.png', '')
@@ -98,6 +117,9 @@ class ImagesWithMasksDataset(Dataset):
     def get_train_images_from_csv(self):
         images = os.listdir(self.config['data_loader']['data_dir_train'])
         print('train images ', images)
+
+        if self.config['resize_128']:
+            self.image_size = 128
 
         masks = np.zeros((len(images), self.image_size, self.image_size))
         depths = np.ones((len(images), self.image_size, self.image_size))
@@ -111,9 +133,13 @@ class ImagesWithMasksDataset(Dataset):
                 images.append(os.path.join(self.config['data_loader']['data_dir_train'], image_id + '.png'))
                 depths[i] = self.all_depths[image_id] * depths[i]
 
-                mask_from_image = np.array(Image.open(images[i].replace('images', 'masks')).convert('RGB'))[:, :,
-                                  1] / 255.0
-                masks[i] = mask_from_image
+                mask_from_image = np.array(
+                    Image.open(images[i].replace('images', 'masks')).convert('RGB')
+                )[:, :, 1] / 255.0
+                # print('mask_from_image ', mask_from_image.shape)
+                if self.config['resize_128']:
+                    mask_from_image = resize_image(np.expand_dims(mask_from_image, 0), (128, 128))
+                masks[i] = mask_from_image.squeeze()
         return images, masks, depths
 
 
@@ -144,3 +170,19 @@ def flip_h_w(image_with_depth_and_mask, direction='horizontal'):
             image_with_depth_and_mask = flip(image_with_depth_and_mask, dim=1)
 
     return image_with_depth_and_mask
+
+
+def resize_image(image, target_size):
+    """Resize image to target size
+
+    Args:
+        image (numpy.ndarray): Image of shape (C x H x W).
+        target_size (tuple): Target size (H, W).
+
+    Returns:
+        numpy.ndarray: Resized image of shape (C x H x W).
+
+    """
+    n_channels = image.shape[0]
+    resized_image = resize(image, (n_channels, target_size[0], target_size[1]), mode='constant')
+    return resized_image

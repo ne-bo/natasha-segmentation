@@ -1,4 +1,3 @@
 - dropout
 - cumsum
-- increase batch size during training
-- vgg16
+- increase batch size during training - doesn't work

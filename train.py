@@ -23,7 +23,7 @@ def main(config, resume):
 
     model = NatashaSegmentation(config=config)
 
-    if True:
+    if False:
         print('Create train loader')
         train_data_loader = SegmantationDataLoader(config, name='train')
         print('Create trainer')
