@@ -128,35 +128,47 @@ class UNetVGG16(nn.Module):
         self.relu = nn.ReLU(inplace=True)
 
         self.conv1 = nn.Sequential(self.encoder[0],
+                                   # nn.BatchNorm2d(num_features=self.encoder[0].out_channels),
                                    self.relu,
                                    self.encoder[2],
+                                   # nn.BatchNorm2d(num_features=self.encoder[2].out_channels),
                                    self.relu)
 
         self.conv2 = nn.Sequential(self.encoder[5],
+                                   # nn.BatchNorm2d(num_features=self.encoder[5].out_channels),
                                    self.relu,
                                    self.encoder[7],
+                                   # nn.BatchNorm2d(num_features=self.encoder[7].out_channels),
                                    self.relu)
 
         self.conv3 = nn.Sequential(self.encoder[10],
+                                   # nn.BatchNorm2d(num_features=self.encoder[10].out_channels),
                                    self.relu,
                                    self.encoder[12],
+                                   # nn.BatchNorm2d(num_features=self.encoder[12].out_channels),
                                    self.relu,
                                    self.encoder[14],
+                                   # nn.BatchNorm2d(num_features=self.encoder[14].out_channels),
                                    self.relu)
-
         self.conv4 = nn.Sequential(self.encoder[17],
+                                   # nn.BatchNorm2d(num_features=self.encoder[17].out_channels),
                                    self.relu,
                                    self.encoder[19],
+                                   # nn.BatchNorm2d(num_features=self.encoder[19].out_channels),
                                    self.relu,
                                    self.encoder[21],
+                                   # nn.BatchNorm2d(num_features=self.encoder[21].out_channels),
                                    self.relu)
 
         self.conv5 = nn.Sequential(self.encoder[24],
-                                   self.relu,
-                                   self.encoder[26],
-                                   self.relu,
-                                   self.encoder[28],
-                                   self.relu)
+                               # nn.BatchNorm2d(num_features=self.encoder[24].out_channels),
+                               self.relu,
+                               self.encoder[26],
+                               # nn.BatchNorm2d(num_features=self.encoder[26].out_channels),
+                               self.relu,
+                               self.encoder[28],
+                               # nn.BatchNorm2d(num_features=self.encoder[28].out_channels),
+                               self.relu)
 
         if with_depth:
             self.center = DecoderBlockV2(512 + 1, num_filters * 8 * 2, num_filters * 8, is_deconv)
@@ -170,6 +182,7 @@ class UNetVGG16(nn.Module):
         self.dec2 = DecoderBlockV2(128 + num_filters * 2, num_filters * 2 * 2, num_filters, is_deconv)
         self.dec1 = ConvRelu(64 + num_filters, num_filters)
         self.final = nn.Conv2d(num_filters, num_classes, kernel_size=1)
+
 
     def forward(self, x, depth=None):
         conv1 = self.conv1(x)
@@ -357,7 +370,6 @@ class UNetResNet(nn.Module):
         if depth is not None:
             depth_layer = depth.unsqueeze(dim=1)[:, :, :conv5.shape[2], :conv5.shape[3]]
             conv5 = torch.cat((conv5, depth_layer), dim=1)
-
 
         pool = self.pool(conv5)
 

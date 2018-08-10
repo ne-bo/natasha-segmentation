@@ -19,7 +19,7 @@ class NatashaSegmentation(BaseModel):
         self.net = UNetVGG16(num_classes=1, num_filters=32,
                              dropout_2d=0.2, pretrained=True, is_deconv=False, with_depth=config['with_depth']).cuda()
         # self.net = UNet11(num_classes=1, num_filters=32, pretrained=True, with_depth=config['with_depth']).cuda()
-        # self.net = UNetResNet(encoder_depth=34, num_classes=1, num_filters=32, dropout_2d=0.2,
+        # self.net = UNetResNet(encoder_depth=101, num_classes=1, num_filters=32, dropout_2d=0.2,
         #                      pretrained=True, is_deconv=False, with_depth=config['with_depth']).cuda()
 
     def forward(self, x, depth=None):

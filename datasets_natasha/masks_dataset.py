@@ -10,6 +10,8 @@ from skimage.transform import resize
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
+from utils.joint_transforms import Scale, RandomAffine, RandomCrop
+
 
 class ImagesWithMasksDataset(Dataset):
     def __init__(self, config, name):
@@ -22,17 +24,10 @@ class ImagesWithMasksDataset(Dataset):
 
         if name == 'train':
             self.transform = transforms.Compose([
-                # transforms.Resize((self.image_size, self.image_size)),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=MEAN, std=STD)
             ])
 
-            if self.config['resize_128']:
-                self.transform = transforms.Compose([
-                    transforms.Resize((128, 128)),
-                    transforms.ToTensor(),
-                    transforms.Normalize(mean=MEAN, std=STD)
-                ])
         else:
             self.transform = transforms.Compose([
                 # transforms.Resize((self.image_size, self.image_size)),
@@ -40,14 +35,10 @@ class ImagesWithMasksDataset(Dataset):
                 transforms.Normalize(mean=MEAN, std=STD)
             ])
 
-            if self.config['resize_128']:
-                self.transform = transforms.Compose([
-                    transforms.Resize((128, 128)),
-                    transforms.ToTensor(),
-                    transforms.Normalize(mean=MEAN, std=STD)
-                ])
-
         self.all_depths = {}
+        if self.config['resize_128']:
+            self.image_size = 128
+
         self.images, self.masks, self.depths = self.get_images_with_masks()
 
     def __len__(self):
@@ -56,16 +47,32 @@ class ImagesWithMasksDataset(Dataset):
     def __getitem__(self, index):
         if index % 10000 == 0:
             print('index ', index)
-        image = self.transform(Image.open(self.images[index]).convert('RGB'))
+        mask = torch.from_numpy(self.masks[index]).float().unsqueeze(dim=0)
         depth = torch.from_numpy(self.depths[index]).float().unsqueeze(dim=0)
 
-        mask = torch.from_numpy(self.masks[index]).float().unsqueeze(dim=0)
+        mask_as_image = transforms.ToPILImage()(mask)
+        image = Image.open(self.images[index]).convert('RGB')
+        if self.name == 'train':
+            affine_joint_transform = RandomAffine(degrees=0, scale=(0.65, 2.0))  # Scale(scale)
+            image, mask = affine_joint_transform(image, mask_as_image)
+
+        if self.config['resize_128']:
+            scale_joint_transform = Scale(self.image_size)
+            image, mask = scale_joint_transform(image, mask)
+
+        image = transforms.ToTensor()(image)
+        if self.name == 'train':
+            mask = transforms.ToTensor()(mask)
+
+        ones = torch.ones(1, self.image_size, self.image_size).float()
+        depth = depth[0, 0, 0] * ones
 
         # image_cumsum = torch.cumsum(image, dim=2)
         image_with_depth_and_mask = torch.cat((image, depth, mask), dim=0)
 
         if self.name == 'train':
-            image_with_depth_and_mask = random_crop(image_with_depth_and_mask)
+            if not self.config['resize_128']:
+                image_with_depth_and_mask = random_crop(image_with_depth_and_mask)
             image_with_depth_and_mask = flip_h_w(image_with_depth_and_mask, direction='horizontal')
             # we should not use vertical flips because ofthe data'snature
             # https://www.kaggle.com/c/tgs-salt-identification-challenge/discussion/61998
@@ -103,10 +110,6 @@ class ImagesWithMasksDataset(Dataset):
             for i, row in tqdm(enumerate(rows[1:])):
                 images.append(row[0] + '.png')
         print('test images ', images)
-
-        if self.config['resize_128']:
-            self.image_size = 128
-
         depths = np.ones((len(images), self.image_size, self.image_size), dtype=float)
         for i, image in enumerate(images):
             image_id = image.replace(self.config['data_loader']['data_dir_test'], '').replace('.png', '')
@@ -118,11 +121,9 @@ class ImagesWithMasksDataset(Dataset):
         images = os.listdir(self.config['data_loader']['data_dir_train'])
         print('train images ', images)
 
-        if self.config['resize_128']:
-            self.image_size = 128
-
-        masks = np.zeros((len(images), self.image_size, self.image_size))
-        depths = np.ones((len(images), self.image_size, self.image_size))
+        size_101 = self.config['101']
+        masks = np.zeros((len(images), size_101, size_101))
+        depths = np.ones((len(images), size_101, size_101))
         images = []
 
         with open(self.config['data_loader']['train_masks_csv'], 'r') as csv_file_mask:
@@ -136,9 +137,6 @@ class ImagesWithMasksDataset(Dataset):
                 mask_from_image = np.array(
                     Image.open(images[i].replace('images', 'masks')).convert('RGB')
                 )[:, :, 1] / 255.0
-                # print('mask_from_image ', mask_from_image.shape)
-                if self.config['resize_128']:
-                    mask_from_image = resize_image(np.expand_dims(mask_from_image, 0), (128, 128))
                 masks[i] = mask_from_image.squeeze()
         return images, masks, depths
 

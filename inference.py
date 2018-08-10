@@ -59,26 +59,30 @@ def save_inference_results_on_disk(loader, network, name):
         else:
             depths = None
 
+        size_101 = config['101']
+
         if config['resize_128']:
             outputs = network(images_themselves, depths)
         else:
-            outputs_1 = network(images_themselves[:, :, :64,:64], depths)
-            outputs_2 = network(images_themselves[:, :, 37:,:64], depths)
-            outputs_3 = network(images_themselves[:, :, :64,37:], depths)
-            outputs_4 = network(images_themselves[:, :, 37:,37:], depths)
+            size_patch = config['patch_size']
+            size_37 = size_101 - size_patch
+            outputs_1 = network(images_themselves[:, :, :size_patch,:size_patch], depths)
+            outputs_2 = network(images_themselves[:, :, size_37:,:size_patch], depths)
+            outputs_3 = network(images_themselves[:, :, :size_patch,size_37:], depths)
+            outputs_4 = network(images_themselves[:, :, size_37:,size_37:], depths)
 
-            outputs = torch.from_numpy(np.zeros((outputs_1.shape[0], outputs_1.shape[1], 101, 101))).float().cuda()
+            outputs = torch.from_numpy(np.zeros((outputs_1.shape[0], outputs_1.shape[1], size_101, size_101))).float().cuda()
 
-            outputs[:, :, :64,:64] += outputs_1
-            outputs[:, :, 37:,:64] += outputs_2
-            outputs[:, :, :64,37:] += outputs_3
-            outputs[:, :, 37:,37:] += outputs_4
+            outputs[:, :, :size_patch,:size_patch] += outputs_1
+            outputs[:, :, size_37:,:size_patch] += outputs_2
+            outputs[:, :, :size_patch,size_37:] += outputs_3
+            outputs[:, :, size_37:,size_37:] += outputs_4
 
-            outputs[:, :, 37:64, :37] /= 2.0
-            outputs[:, :, 37:64, 64:] /= 2.0
-            outputs[:, :, :37, 37:64] /= 2.0
-            outputs[:, :, 64:, 37:64] /= 2.0
-            outputs[:, :, 37:64, 37:64] /= 4.0
+            outputs[:, :, size_37:size_patch, :size_37] /= 2.0
+            outputs[:, :, size_37:size_patch, size_patch:] /= 2.0
+            outputs[:, :, :size_37, size_37:size_patch] /= 2.0
+            outputs[:, :, size_patch:, size_37:size_patch] /= 2.0
+            outputs[:, :, size_37:size_patch, size_37:size_patch] /= 4.0
 
         outputs = F.sigmoid(outputs)
 
@@ -94,9 +98,9 @@ def save_inference_results_on_disk(loader, network, name):
                 outputs[j] = torch.from_numpy(output).float()
 
         if config['resize_128']:
-            resized_outputs = np.zeros((outputs.shape[0], outputs.shape[1], 101, 101))
+            resized_outputs = np.zeros((outputs.shape[0], outputs.shape[1], size_101, size_101))
             for j, output in enumerate(outputs):
-                resized_outputs[j] = resize_image(output.data.cpu().numpy(), (101, 101))
+                resized_outputs[j] = resize_image(output.data.cpu().numpy(), (size_101, size_101))
             outputs = torch.from_numpy(resized_outputs).cuda().float()
 
         all_outputs = torch.cat((all_outputs, outputs.data), dim=0)

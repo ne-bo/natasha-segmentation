@@ -8,8 +8,8 @@
         "train_masks_csv": "/home/natasha/salt/train.csv",
         "depths_csv": "/home/natasha/salt/depths.csv",
         "sample_submission_csv": "/home/natasha/salt/sample_submission.csv",
-        "batch_size_train": 8,
-        "batch_size_test": 16,
+        "batch_size_train": 32,
+        "batch_size_test": 8,
         "shuffle": true,
         "drop_last": false,
         "initial_image_size": 101,
@@ -20,7 +20,7 @@
         "shuffle": true
     },
 
-    "lr_scheduler_type": "ExponentialLR",
+    "lr_scheduler_type": "ReduceLROnPlateau", //"ExponentialLR",
     "lr_scheduler_freq": 1,
     "lr_scheduler": {
             "gamma": 0.8685113737513527
@@ -49,5 +49,7 @@
     "pack_volume": 25,
     "with_depth": true,
     "crf": true,
-    "resize_128": true
+    "resize_128": false,
+    "101": 101,
+    "patch_size": 64
 }
