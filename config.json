@@ -20,10 +20,11 @@
         "shuffle": true
     },
 
-    "lr_scheduler_type": "ReduceLROnPlateau", //"ExponentialLR",
+    "lr_scheduler_type": "ExponentialLR",//"ReduceLROnPlateau",
     "lr_scheduler_freq": 1,
     "lr_scheduler": {
             "gamma": 0.8685113737513527
+        //"verbose": true
     },
  
     "optimizer_type": "Adam",
@@ -34,7 +35,7 @@
     "loss": "bce",
     "metrics": [],
     "trainer": {
-        "epochs": 70,
+        "epochs": 100,
         "save_dir": "saved/",
         "save_freq": 1,
         "verbosity": 2,

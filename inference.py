@@ -8,7 +8,6 @@ from torch.autograd import Variable
 from tqdm import tqdm
 import torch.nn.functional as F
 
-from datasets_natasha.masks_dataset import resize_image
 from utils.crf import dense_crf
 from utils.util import rle_encode, RLenc
 

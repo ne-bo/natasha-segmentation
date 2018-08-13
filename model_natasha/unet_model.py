@@ -128,46 +128,46 @@ class UNetVGG16(nn.Module):
         self.relu = nn.ReLU(inplace=True)
 
         self.conv1 = nn.Sequential(self.encoder[0],
-                                   # nn.BatchNorm2d(num_features=self.encoder[0].out_channels),
+                                   nn.BatchNorm2d(num_features=self.encoder[0].out_channels),
                                    self.relu,
                                    self.encoder[2],
-                                   # nn.BatchNorm2d(num_features=self.encoder[2].out_channels),
+                                   nn.BatchNorm2d(num_features=self.encoder[2].out_channels),
                                    self.relu)
 
         self.conv2 = nn.Sequential(self.encoder[5],
-                                   # nn.BatchNorm2d(num_features=self.encoder[5].out_channels),
+                                   nn.BatchNorm2d(num_features=self.encoder[5].out_channels),
                                    self.relu,
                                    self.encoder[7],
-                                   # nn.BatchNorm2d(num_features=self.encoder[7].out_channels),
+                                   nn.BatchNorm2d(num_features=self.encoder[7].out_channels),
                                    self.relu)
 
         self.conv3 = nn.Sequential(self.encoder[10],
-                                   # nn.BatchNorm2d(num_features=self.encoder[10].out_channels),
+                                   nn.BatchNorm2d(num_features=self.encoder[10].out_channels),
                                    self.relu,
                                    self.encoder[12],
-                                   # nn.BatchNorm2d(num_features=self.encoder[12].out_channels),
+                                   nn.BatchNorm2d(num_features=self.encoder[12].out_channels),
                                    self.relu,
                                    self.encoder[14],
-                                   # nn.BatchNorm2d(num_features=self.encoder[14].out_channels),
+                                   nn.BatchNorm2d(num_features=self.encoder[14].out_channels),
                                    self.relu)
         self.conv4 = nn.Sequential(self.encoder[17],
-                                   # nn.BatchNorm2d(num_features=self.encoder[17].out_channels),
+                                   nn.BatchNorm2d(num_features=self.encoder[17].out_channels),
                                    self.relu,
                                    self.encoder[19],
-                                   # nn.BatchNorm2d(num_features=self.encoder[19].out_channels),
+                                   nn.BatchNorm2d(num_features=self.encoder[19].out_channels),
                                    self.relu,
                                    self.encoder[21],
-                                   # nn.BatchNorm2d(num_features=self.encoder[21].out_channels),
+                                   nn.BatchNorm2d(num_features=self.encoder[21].out_channels),
                                    self.relu)
 
         self.conv5 = nn.Sequential(self.encoder[24],
-                               # nn.BatchNorm2d(num_features=self.encoder[24].out_channels),
+                               nn.BatchNorm2d(num_features=self.encoder[24].out_channels),
                                self.relu,
                                self.encoder[26],
-                               # nn.BatchNorm2d(num_features=self.encoder[26].out_channels),
+                               nn.BatchNorm2d(num_features=self.encoder[26].out_channels),
                                self.relu,
                                self.encoder[28],
-                               # nn.BatchNorm2d(num_features=self.encoder[28].out_channels),
+                               nn.BatchNorm2d(num_features=self.encoder[28].out_channels),
                                self.relu)
 
         if with_depth:

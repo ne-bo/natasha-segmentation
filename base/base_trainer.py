@@ -4,7 +4,7 @@ import json
 import logging
 import torch
 import torch.optim as optim
-from torch.optim.lr_scheduler import ExponentialLR
+from torch.optim.lr_scheduler import ExponentialLR, ReduceLROnPlateau
 
 from utils.util import ensure_dir
 
@@ -91,11 +91,11 @@ class BaseTrainer:
                 self._save_checkpoint(epoch, log)
             if self.lr_scheduler and epoch % self.lr_scheduler_freq == 0:
                 if self.config['lr_scheduler_type'] == 'ReduceLROnPlateau':
-                    self.lr_scheduler.step(self.metrics, epoch)
+                    self.lr_scheduler.step(log[self.monitor], epoch)
                 else:
                     self.lr_scheduler.step(epoch)
-                lr = self.lr_scheduler.get_lr()[0]
-                self.logger.info('New Learning Rate: {:.6f}'.format(lr))
+                    lr = self.lr_scheduler.get_lr()[0]
+                    self.logger.info('New Learning Rate: {:.6f}'.format(lr))
 
     def _train_epoch(self, epoch):
         """

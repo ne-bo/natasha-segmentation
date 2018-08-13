@@ -6,11 +6,8 @@ import numpy as np
 import torch
 import torchvision.transforms as transforms
 from PIL import Image
-from skimage.transform import resize
 from torch.utils.data import Dataset
 from tqdm import tqdm
-
-from utils.joint_transforms import Scale, RandomAffine, RandomCrop
 
 
 class ImagesWithMasksDataset(Dataset):
@@ -24,10 +21,12 @@ class ImagesWithMasksDataset(Dataset):
 
         if name == 'train':
             self.transform = transforms.Compose([
+                # transforms.Resize((self.image_size, self.image_size)),
+                transforms.ColorJitter(),
+                transforms.RandomGrayscale(p=0.5),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=MEAN, std=STD)
             ])
-
         else:
             self.transform = transforms.Compose([
                 # transforms.Resize((self.image_size, self.image_size)),
@@ -36,9 +35,6 @@ class ImagesWithMasksDataset(Dataset):
             ])
 
         self.all_depths = {}
-        if self.config['resize_128']:
-            self.image_size = 128
-
         self.images, self.masks, self.depths = self.get_images_with_masks()
 
     def __len__(self):
@@ -47,32 +43,16 @@ class ImagesWithMasksDataset(Dataset):
     def __getitem__(self, index):
         if index % 10000 == 0:
             print('index ', index)
-        mask = torch.from_numpy(self.masks[index]).float().unsqueeze(dim=0)
+        image = self.transform(Image.open(self.images[index]).convert('RGB'))
         depth = torch.from_numpy(self.depths[index]).float().unsqueeze(dim=0)
 
-        mask_as_image = transforms.ToPILImage()(mask)
-        image = Image.open(self.images[index]).convert('RGB')
-        if self.name == 'train':
-            affine_joint_transform = RandomAffine(degrees=0, scale=(0.65, 2.0))  # Scale(scale)
-            image, mask = affine_joint_transform(image, mask_as_image)
+        mask = torch.from_numpy(self.masks[index]).float().unsqueeze(dim=0)
 
-        if self.config['resize_128']:
-            scale_joint_transform = Scale(self.image_size)
-            image, mask = scale_joint_transform(image, mask)
-
-        image = transforms.ToTensor()(image)
-        if self.name == 'train':
-            mask = transforms.ToTensor()(mask)
-
-        ones = torch.ones(1, self.image_size, self.image_size).float()
-        depth = depth[0, 0, 0] * ones
-
-        # image_cumsum = torch.cumsum(image, dim=2)
+        image_cumsum = torch.cumsum(image, dim=1)
         image_with_depth_and_mask = torch.cat((image, depth, mask), dim=0)
 
         if self.name == 'train':
-            if not self.config['resize_128']:
-                image_with_depth_and_mask = random_crop(image_with_depth_and_mask)
+            image_with_depth_and_mask = random_crop(image_with_depth_and_mask)
             image_with_depth_and_mask = flip_h_w(image_with_depth_and_mask, direction='horizontal')
             # we should not use vertical flips because ofthe data'snature
             # https://www.kaggle.com/c/tgs-salt-identification-challenge/discussion/61998
@@ -121,9 +101,8 @@ class ImagesWithMasksDataset(Dataset):
         images = os.listdir(self.config['data_loader']['data_dir_train'])
         print('train images ', images)
 
-        size_101 = self.config['101']
-        masks = np.zeros((len(images), size_101, size_101))
-        depths = np.ones((len(images), size_101, size_101))
+        masks = np.zeros((len(images), self.image_size, self.image_size))
+        depths = np.ones((len(images), self.image_size, self.image_size))
         images = []
 
         with open(self.config['data_loader']['train_masks_csv'], 'r') as csv_file_mask:
@@ -134,10 +113,9 @@ class ImagesWithMasksDataset(Dataset):
                 images.append(os.path.join(self.config['data_loader']['data_dir_train'], image_id + '.png'))
                 depths[i] = self.all_depths[image_id] * depths[i]
 
-                mask_from_image = np.array(
-                    Image.open(images[i].replace('images', 'masks')).convert('RGB')
-                )[:, :, 1] / 255.0
-                masks[i] = mask_from_image.squeeze()
+                mask_from_image = np.array(Image.open(images[i].replace('images', 'masks')).convert('RGB'))[:, :,
+                                  1] / 255.0
+                masks[i] = mask_from_image
         return images, masks, depths
 
 
@@ -168,19 +146,3 @@ def flip_h_w(image_with_depth_and_mask, direction='horizontal'):
             image_with_depth_and_mask = flip(image_with_depth_and_mask, dim=1)
 
     return image_with_depth_and_mask
-
-
-def resize_image(image, target_size):
-    """Resize image to target size
-
-    Args:
-        image (numpy.ndarray): Image of shape (C x H x W).
-        target_size (tuple): Target size (H, W).
-
-    Returns:
-        numpy.ndarray: Resized image of shape (C x H x W).
-
-    """
-    n_channels = image.shape[0]
-    resized_image = resize(image, (n_channels, target_size[0], target_size[1]), mode='constant')
-    return resized_image

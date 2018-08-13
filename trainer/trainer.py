@@ -51,7 +51,10 @@ class Trainer(BaseTrainer):
             masks_probs_flat = masks_probs.view(-1)
             true_masks_flat = true_masks.view(-1)
 
-            loss = self.loss(masks_probs_flat, true_masks_flat)
+            if self.config['loss'] == 'lovasz':
+                loss = self.loss(masks_pred, true_masks)
+            else:
+                loss = self.loss(masks_probs_flat, true_masks_flat)
 
             self.optimizer.zero_grad()
             loss.backward()

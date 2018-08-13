@@ -4,6 +4,8 @@ from os import path
 import torch.nn.functional as F
 from torch.autograd import Function
 
+from model_natasha.lovasz_losses import lovasz_hinge
+
 
 def bce(y_input, y_target):
     loss = torch.nn.BCELoss()
@@ -24,3 +26,7 @@ class DiceLoss(torch.nn.Module):
 def dice(y_input, y_target):
     loss = DiceLoss()
     return loss(y_input, y_target)
+
+
+def lovasz(y_input, y_target):
+    return lovasz_hinge(y_input, y_target, per_image=False)
