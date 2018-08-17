@@ -30,3 +30,8 @@ def dice(y_input, y_target):
 
 def lovasz(y_input, y_target):
     return lovasz_hinge(y_input, y_target, per_image=False)
+
+
+def lovasz_bce(y_input, y_target):
+    loss = torch.nn.BCELoss()
+    return loss(y_input, y_target) + lovasz_hinge(y_input, y_target, per_image=False)
