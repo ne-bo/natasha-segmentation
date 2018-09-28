@@ -8,6 +8,7 @@ from torch.autograd import Variable
 from tqdm import tqdm
 import torch.nn.functional as F
 
+from datasets_natasha.masks_dataset import resize_image, flip_h_w, flip
 from utils.crf import dense_crf
 from utils.util import rle_encode, RLenc
 
@@ -42,7 +43,7 @@ def save_inference_results_on_disk(loader, network, name):
     path = os.path.join(config['temp_folder'], name, '')
     print('path ', path)
     network.eval()
-
+    network = network.cuda()
     all_outputs = torch.cuda.FloatTensor()
     i = 1
     print('Inference is in progress')
@@ -61,14 +62,14 @@ def save_inference_results_on_disk(loader, network, name):
         size_101 = config['101']
 
         if config['resize_128']:
-            outputs = network(images_themselves, depths)
+            outputs = network(images_themselves, depths).detach()
         else:
             size_patch = config['patch_size']
             size_37 = size_101 - size_patch
-            outputs_1 = network(images_themselves[:, :, :size_patch,:size_patch], depths)
-            outputs_2 = network(images_themselves[:, :, size_37:,:size_patch], depths)
-            outputs_3 = network(images_themselves[:, :, :size_patch,size_37:], depths)
-            outputs_4 = network(images_themselves[:, :, size_37:,size_37:], depths)
+            outputs_1 = network(images_themselves[:, :, :size_patch, :size_patch], depths).detach()
+            outputs_2 = network(images_themselves[:, :, size_37:, :size_patch], depths).detach()
+            outputs_3 = network(images_themselves[:, :, :size_patch, size_37:], depths).detach()
+            outputs_4 = network(images_themselves[:, :, size_37:, size_37:], depths).detach()
 
             outputs = torch.from_numpy(np.zeros((outputs_1.shape[0], outputs_1.shape[1], size_101, size_101))).float().cuda()
 
@@ -99,8 +100,22 @@ def save_inference_results_on_disk(loader, network, name):
         if config['resize_128']:
             resized_outputs = np.zeros((outputs.shape[0], outputs.shape[1], size_101, size_101))
             for j, output in enumerate(outputs):
-                resized_outputs[j] = resize_image(output.data.cpu().numpy(), (size_101, size_101))
+                output_as_array = output.data.cpu().numpy()
+
+                resized_outputs[j] = output_as_array[:, 27:,
+                                     14:-13]  # resize_image(output_as_array, (size_101, size_101))
+
             outputs = torch.from_numpy(resized_outputs).cuda().float()
+
+            # outputs_for_plot = outputs.cpu().numpy()[0][0]
+            # print('outputs_for_plot ', outputs_for_plot, outputs_for_plot.shape)
+            # print('true_masks ', true_masks.shape)
+            # import matplotlib.pyplot as plt
+            # plt.imshow(outputs_for_plot)
+            # plt.show()
+            # plt.imshow(true_masks[0], cmap='gray')
+            # plt.show()
+            # input()
 
         all_outputs = torch.cat((all_outputs, outputs.data), dim=0)
 
@@ -117,7 +132,11 @@ def save_inference_results_on_disk(loader, network, name):
 
 
 def convert_output_to_rle(output):
-    predicted = output.gt(0.2)
+    predicted = output.gt(0.5)
+
+    # if predicted.sum() < 25:
+    #     return ''
+
     rle = RLenc(predicted[0].cpu().numpy(), order='F', format=True)
     return rle
 
@@ -135,14 +154,14 @@ def inference(loader, model):
             all_ids.append(row[0])
 
     rles = []
-    for id, output in zip(all_ids, all_outputs):
+    for id, output in tqdm(zip(all_ids, all_outputs)):
         rles.append(convert_output_to_rle(output))
-        print('id ', id)
+        # print('id ', id)
 
     rows = []
     with open('natasha_submission.csv', 'w') as csv_file:
         csv_file.write('id,rle_mask\n')
-        for (id, rle) in zip(all_ids, rles):
+        for (id, rle) in tqdm(zip(all_ids, rles)):
             row = str(id) + ',' + rle + '\n'
             rows.append(row)
         rows[-1] = rows[-1].replace('\n', '')

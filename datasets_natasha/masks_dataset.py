@@ -6,8 +6,74 @@ import numpy as np
 import torch
 import torchvision.transforms as transforms
 from PIL import Image
+from skimage.transform import resize
 from torch.utils.data import Dataset
 from tqdm import tqdm
+
+from albumentations import (
+    HorizontalFlip, IAAPerspective, ShiftScaleRotate, CLAHE, RandomRotate90,
+    Transpose, ShiftScaleRotate, Blur, OpticalDistortion, GridDistortion, HueSaturationValue,
+    IAAAdditiveGaussianNoise, GaussNoise, MotionBlur, MedianBlur, IAAPiecewiseAffine,
+    IAASharpen, IAAEmboss, RandomContrast, RandomBrightness, Flip, OneOf, Compose
+)
+
+
+def strong_aug(p=.5, config=None):
+    return Compose([
+        HorizontalFlip(),
+        # OneOf([
+        #     IAAAdditiveGaussianNoise(),
+        #     GaussNoise(),
+        # ], p=0.2),
+        # OneOf([
+        #     MotionBlur(p=.2),
+        #     MedianBlur(blur_limit=3, p=.1),
+        #     Blur(blur_limit=3, p=.1),
+        # ], p=0.2),
+        ShiftScaleRotate(shift_limit=0.001, scale_limit=0.1, rotate_limit=10, p=.2),
+        # Compose([
+        #     OpticalDistortion(p=0.3),
+        #     GridDistortion(p=.1),
+        #     IAAPiecewiseAffine(p=0.3),
+        # ], p=0.2),
+        # OneOf([
+        #     CLAHE(clip_limit=2),
+        #     IAASharpen(),
+        #     IAAEmboss(),
+        #     RandomContrast(),
+        #     RandomBrightness(),
+        # ], p=0.3),
+        # HueSaturationValue(p=0.3),
+    ], p=p)
+
+
+def tta_aug(p=.5, config=None):
+    return Compose([
+        # HorizontalFlip(),
+        # OneOf([
+        #     IAAAdditiveGaussianNoise(),
+        #     GaussNoise(),
+        # ], p=0.2),
+        # OneOf([
+        #     MotionBlur(p=.2),
+        #     MedianBlur(blur_limit=3, p=.1),
+        #     Blur(blur_limit=3, p=.1),
+        # ], p=0.2),
+        # ShiftScaleRotate(shift_limit=0.001, scale_limit=0.1, rotate_limit=10, p=.2),
+        # Compose([
+        #     OpticalDistortion(p=0.3),
+        #     GridDistortion(p=.1),
+        #     IAAPiecewiseAffine(p=0.3),
+        # ], p=0.2),
+        # OneOf([
+        #     CLAHE(clip_limit=2),
+        #     IAASharpen(),
+        #     IAAEmboss(),
+        #     RandomContrast(),
+        #     RandomBrightness(),
+        # ], p=0.3),
+        # HueSaturationValue(p=0.3),
+    ], p=p)
 
 
 class ImagesWithMasksDataset(Dataset):
@@ -15,24 +81,12 @@ class ImagesWithMasksDataset(Dataset):
         self.data_folder = config['data_loader']['data_dir_%s' % name]
         self.name = name
         self.config = config
-        self.image_size = config['data_loader']['initial_image_size']
+        if self.config['resize_128']:
+            self.image_size = 128
+        else:
+            self.image_size = config['data_loader']['initial_image_size']
         MEAN = [0.485, 0.456, 0.406]
         STD = [0.229, 0.224, 0.225]
-
-        if name == 'train':
-            self.transform = transforms.Compose([
-                # transforms.Resize((self.image_size, self.image_size)),
-                transforms.ColorJitter(),
-                transforms.RandomGrayscale(p=0.5),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=MEAN, std=STD)
-            ])
-        else:
-            self.transform = transforms.Compose([
-                # transforms.Resize((self.image_size, self.image_size)),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=MEAN, std=STD)
-            ])
 
         self.all_depths = {}
         self.images, self.masks, self.depths = self.get_images_with_masks()
@@ -43,17 +97,38 @@ class ImagesWithMasksDataset(Dataset):
     def __getitem__(self, index):
         if index % 10000 == 0:
             print('index ', index)
-        image = self.transform(Image.open(self.images[index]).convert('RGB'))
-        depth = torch.from_numpy(self.depths[index]).float().unsqueeze(dim=0)
 
-        mask = torch.from_numpy(self.masks[index]).float().unsqueeze(dim=0)
+        image = Image.open(self.images[index]).convert('RGB')
 
-        image_cumsum = torch.cumsum(image, dim=1)
+        if self.config['resize_128']:
+            pad_up_to_128 = transforms.Pad(padding=(14, 27, 13, 0), padding_mode='reflect')
+            # pad_up_to_128 = transforms.Pad(padding=(14, 14, 13, 13), padding_mode='reflect')
+            image = pad_up_to_128(image)
+
+        image = np.array(image)
+        depth = self.depths[index]
+        mask = self.masks[index]
+
+        whatever_data = "my name"
+        if self.name == 'train':
+            augmentation = strong_aug(p=0.5, config=self.config)
+        else:
+            augmentation = tta_aug(p=0.5, config=self.config)
+
+        data = {"image": image, "mask": mask, "whatever_data": whatever_data, "additional": "hello"}
+        augmented = augmentation(**data)
+        image, mask, whatever_data, additional = augmented["image"], augmented["mask"], \
+                                                 augmented["whatever_data"], \
+                                                 augmented["additional"]
+
+        image = transforms.ToTensor()(image).float()
+        mask = torch.from_numpy(mask).float().unsqueeze(dim=0)
+        depth = torch.from_numpy(depth).float().unsqueeze(dim=0)
         image_with_depth_and_mask = torch.cat((image, depth, mask), dim=0)
 
-        if self.name == 'train':
-            image_with_depth_and_mask = random_crop(image_with_depth_and_mask)
-            image_with_depth_and_mask = flip_h_w(image_with_depth_and_mask, direction='horizontal')
+        # if self.name == 'train':
+        #     image_with_depth_and_mask = random_crop(image_with_depth_and_mask)
+        # image_with_depth_and_mask = flip_h_w(image_with_depth_and_mask, direction='horizontal')
             # we should not use vertical flips because ofthe data'snature
             # https://www.kaggle.com/c/tgs-salt-identification-challenge/discussion/61998
             # image_with_depth_and_mask = flip_h_w(image_with_depth_and_mask, direction='vertical')
@@ -113,8 +188,15 @@ class ImagesWithMasksDataset(Dataset):
                 images.append(os.path.join(self.config['data_loader']['data_dir_train'], image_id + '.png'))
                 depths[i] = self.all_depths[image_id] * depths[i]
 
-                mask_from_image = np.array(Image.open(images[i].replace('images', 'masks')).convert('RGB'))[:, :,
-                                  1] / 255.0
+                mask_as_image = Image.open(images[i].replace('images', 'masks')).convert('RGB')
+                if self.config['resize_128']:
+                    pad_up_to_128 = transforms.Pad(padding=(14, 27, 13, 0), padding_mode='reflect')
+                    mask_as_image = pad_up_to_128(mask_as_image)
+                # if self.config['resize_128']:
+                #     mask_as_image = mask_as_image.resize((128, 128))
+
+                mask_from_image = np.array(mask_as_image)[:, :, 1] / 255.0
+
                 masks[i] = mask_from_image
         return images, masks, depths
 
@@ -146,3 +228,19 @@ def flip_h_w(image_with_depth_and_mask, direction='horizontal'):
             image_with_depth_and_mask = flip(image_with_depth_and_mask, dim=1)
 
     return image_with_depth_and_mask
+
+
+def resize_image(image, target_size):
+    """Resize image to target size
+
+    Args:
+        image (numpy.ndarray): Image of shape (C x H x W).
+        target_size (tuple): Target size (H, W).
+
+    Returns:
+        numpy.ndarray: Resized image of shape (C x H x W).
+
+    """
+    n_channels = image.shape[0]
+    resized_image = resize(image, (n_channels, target_size[0], target_size[1]), mode='constant')
+    return resized_image

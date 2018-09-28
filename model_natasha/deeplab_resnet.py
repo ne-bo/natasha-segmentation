@@ -123,10 +123,14 @@ class Classifier_Module(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, layers, NoLabels):
+    def __init__(self, block, layers, NoLabels, with_depth=False):
         self.inplanes = 64
         super(ResNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
+        if with_depth:
+            self.conv1 = nn.Conv2d(3 + 1, 64, kernel_size=7, stride=2, padding=3,
+                                   bias=False)
+        else:
+            self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
         self.bn1 = nn.BatchNorm2d(64, affine=affine_par)
         for i in self.bn1.parameters():
@@ -185,9 +189,9 @@ class ResNet(nn.Module):
 
 
 class MS_Deeplab(nn.Module):
-    def __init__(self, block, NoLabels):
+    def __init__(self, block, NoLabels, with_depth=False):
         super(MS_Deeplab, self).__init__()
-        self.Scale = ResNet(block, [3, 4, 23, 3], NoLabels)  # changed to fix #4
+        self.Scale = ResNet(block, [3, 4, 23, 3], NoLabels, with_depth=with_depth)  # changed to fix #4
 
     def forward(self, x, depth=None):
         input_size = x.size()[2]
@@ -197,6 +201,15 @@ class MS_Deeplab(nn.Module):
         out = []
         x2 = self.interp1(x)
         x3 = self.interp2(x)
+
+        if depth is not None:
+            depth_layer = depth.unsqueeze(dim=1)[:, :, :x.shape[2], :x.shape[3]]
+            depth_layer2 = depth.unsqueeze(dim=1)[:, :, :x2.shape[2], :x2.shape[3]]
+            depth_layer3 = depth.unsqueeze(dim=1)[:, :, :x3.shape[2], :x3.shape[3]]
+            x = torch.cat((x, depth_layer), dim=1)
+            x2 = torch.cat((x2, depth_layer2), dim=1)
+            x3 = torch.cat((x3, depth_layer3), dim=1)
+
         out.append(self.Scale(x))  # for original scale
         out.append(self.interp3(self.Scale(x2)))  # for 0.75x scale
         out.append(self.Scale(x3))  # for 0.5x scale
@@ -210,6 +223,6 @@ class MS_Deeplab(nn.Module):
         return output
 
 
-def Res_Deeplab(NoLabels=21):
-    model = MS_Deeplab(Bottleneck, NoLabels)
+def Res_Deeplab(NoLabels, with_depth=False):
+    model = MS_Deeplab(Bottleneck, NoLabels, with_depth=with_depth)
     return model

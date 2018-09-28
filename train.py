@@ -9,7 +9,7 @@ from inference import inference
 from model_natasha.model import *
 from model_natasha.loss import *
 from model_natasha.metric import *
-from data_loader_natasha import SegmantationDataLoader
+from data_loader_natasha import SegmentationDataLoader
 from trainer import Trainer
 from logger import Logger
 
@@ -23,9 +23,9 @@ def main(config, resume):
 
     model = NatashaSegmentation(config=config)
 
-    if True:
-        print('Create train loader')
-        train_data_loader = SegmantationDataLoader(config, name='train')
+    print('Create train loader')
+    train_data_loader = SegmentationDataLoader(config, name='train')
+    if False:
         print('Create trainer')
         trainer = Trainer(model, loss,
                           resume=resume,
@@ -37,10 +37,14 @@ def main(config, resume):
         trainer.train()
 
     print('Create test loader')
-    test_data_loader = SegmantationDataLoader(config, name='test')
+    test_data_loader = SegmentationDataLoader(config, name='test')
     checkpoint_for_model = torch.load('saved/NatashaSegmentation/model_best.pth.tar')
     model.load_state_dict(checkpoint_for_model['state_dict'])
     model.eval()
+
+    # print('Do inference for train')
+    # inference(train_data_loader, model)
+
     print('Do inference')
     inference(test_data_loader, model)
 

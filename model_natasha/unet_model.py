@@ -4,6 +4,18 @@ import torchvision
 from .unet_parts import *
 
 
+class ConvBnRelu(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.conv = nn.Sequential(nn.Conv2d(in_channels, out_channels, 3, padding=1),
+                                  nn.BatchNorm2d(out_channels),
+                                  nn.ReLU(inplace=True)
+                                  )
+
+    def forward(self, x):
+        return self.conv(x)
+
+
 class UNet(nn.Module):
     def __init__(self, n_channels, n_classes, with_depth=False):
         super(UNet, self).__init__()
@@ -161,14 +173,14 @@ class UNetVGG16(nn.Module):
                                    self.relu)
 
         self.conv5 = nn.Sequential(self.encoder[24],
-                               nn.BatchNorm2d(num_features=self.encoder[24].out_channels),
-                               self.relu,
-                               self.encoder[26],
-                               nn.BatchNorm2d(num_features=self.encoder[26].out_channels),
-                               self.relu,
-                               self.encoder[28],
-                               nn.BatchNorm2d(num_features=self.encoder[28].out_channels),
-                               self.relu)
+                                   nn.BatchNorm2d(num_features=self.encoder[24].out_channels),
+                                   self.relu,
+                                   self.encoder[26],
+                                   nn.BatchNorm2d(num_features=self.encoder[26].out_channels),
+                                   self.relu,
+                                   self.encoder[28],
+                                   nn.BatchNorm2d(num_features=self.encoder[28].out_channels),
+                                   self.relu)
 
         if with_depth:
             self.center = DecoderBlockV2(512 + 1, num_filters * 8 * 2, num_filters * 8, is_deconv)
@@ -182,7 +194,6 @@ class UNetVGG16(nn.Module):
         self.dec2 = DecoderBlockV2(128 + num_filters * 2, num_filters * 2 * 2, num_filters, is_deconv)
         self.dec1 = ConvRelu(64 + num_filters, num_filters)
         self.final = nn.Conv2d(num_filters, num_classes, kernel_size=1)
-
 
     def forward(self, x, depth=None):
         conv1 = self.conv1(x)
@@ -384,3 +395,51 @@ class UNetResNet(nn.Module):
         dec0 = self.dec0(dec1)
 
         return self.final(F.dropout2d(dec0, p=self.dropout_2d))
+
+
+class SaltUNet(nn.Module):
+    def __init__(self, num_classes, dropout_2d=0.2, pretrained=False, is_deconv=False,
+                 with_depth=False):
+        super().__init__()
+        self.num_classes = num_classes
+        self.dropout_2d = dropout_2d
+
+        self.encoder = torchvision.models.resnet34(pretrained=pretrained)
+
+        self.relu = nn.ReLU(inplace=True)
+
+        self.input_adjust = nn.Sequential(self.encoder.conv1,
+                                          self.encoder.bn1,
+                                          self.encoder.relu)
+
+        self.conv1 = list(self.encoder.layer1.children())[1]
+        self.conv2 = list(self.encoder.layer1.children())[2]
+        self.conv3 = list(self.encoder.layer2.children())[0]
+        self.conv4 = list(self.encoder.layer2.children())[1]
+
+        if with_depth:
+            self.dec3 = DecoderBlockV2(256, 512, 256, is_deconv)
+            self.dec3 = DecoderBlockV2(256 + 1, 512, 256, is_deconv)
+        else:
+            self.dec3 = DecoderBlockV2(256, 512, 256, is_deconv)
+
+        self.dec2 = ConvBnRelu(256 + 64, 256)
+        self.dec1 = DecoderBlockV2(256 + 64, (256 + 64) * 2, 256, is_deconv)
+
+        self.final = nn.Conv2d(256, num_classes, kernel_size=1)
+
+    def forward(self, x, depth=None):
+        input_adjust = self.input_adjust(x)
+        conv1 = self.conv1(input_adjust)
+        conv2 = self.conv2(conv1)
+        conv3 = self.conv3(conv2)
+        center = self.conv4(conv3)
+
+        if depth is not None:
+            depth_layer = depth.unsqueeze(dim=1)[:, :, :conv3.shape[2], :conv3.shape[3]]
+            conv3 = torch.cat((conv3, depth_layer), dim=1)
+
+        dec3 = self.dec3(torch.cat([center, conv3], 1))
+        dec2 = self.dec2(torch.cat([dec3, conv2], 1))
+        dec1 = F.dropout2d(self.dec1(torch.cat([dec2, conv1], 1)), p=self.dropout_2d)
+        return self.final(dec1)
