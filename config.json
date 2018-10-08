@@ -3,12 +3,12 @@
     "cuda": true,
     "gpu": 0,
     "data_loader": {
-        "data_dir_test": "/home/natasha/salt/test/images/",
-        "data_dir_train": "/home/natasha/salt/train/images/",
-        "train_masks_csv": "/home/natasha/salt/train.csv",
-        "depths_csv": "/home/natasha/salt/depths.csv",
-        "sample_submission_csv": "/home/natasha/salt/sample_submission.csv",
-        "batch_size_train": 32,
+        "data_dir_test": "/home/ubuntu/salt/test/images/",
+        "data_dir_train": "/home/ubuntu/salt/train/images/",
+        "train_masks_csv": "/home/ubuntu/salt/train_aug.csv",
+        "depths_csv": "/home/ubuntu/salt/depths_aug.csv",
+        "sample_submission_csv": "/home/ubuntu/salt/sample_submission.csv",
+        "batch_size_train": 48,
         "batch_size_test": 30,
         "shuffle": true,
         "drop_last": false,
@@ -21,9 +21,9 @@
     },
 
     "lr_scheduler_type": "ExponentialLR",//"ReduceLROnPlateau",
-    "lr_scheduler_freq": 22,
+    "lr_scheduler_freq": 30,
     "lr_scheduler": {
-        "gamma": 0.9
+        "gamma": 0.97
         //"verbose": true
     },
  
@@ -33,16 +33,17 @@
         "weight_decay": 0.0001
     },
     "loss": "bce",
+    "loss_after_100": "lovasz",
     "metrics": [],
     "trainer": {
-        "epochs": 100,
+        "epochs": 300,
         "save_dir": "saved/",
-        "save_freq": 1,
-        "verbosity": 2,
+        "save_freq": 300,
+        "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "min"
     },
-    "arch": "NatashaSegmantationModel",
+    "arch": "NatashaSegmentationModel",
     "model": {
 
     },

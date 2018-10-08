@@ -25,20 +25,25 @@ def main(config, resume):
 
     print('Create train loader')
     train_data_loader = SegmentationDataLoader(config, name='train')
+
     if False:
         print('Create trainer')
-        trainer = Trainer(model, loss,
-                          resume=resume,
-                          config=config,
-                          data_loader=train_data_loader,
-                          train_logger=train_logger)
+        trainer = Trainer(
+            model, loss,
+            resume=resume,
+            config=config,
+            data_loader=train_data_loader,
+            train_logger=train_logger,
+            starting_checkpoint=None#'saved//NatashaSegmentation/seresnet152-epoch-148-loss-0.0072.pth.tar'
+        )
 
         print('Start training')
         trainer.train()
 
     print('Create test loader')
     test_data_loader = SegmentationDataLoader(config, name='test')
-    checkpoint_for_model = torch.load('saved/NatashaSegmentation/model_best.pth.tar')
+    # checkpoint_for_model = torch.load('saved/NatashaSegmentation/model_best.pth.tar')
+    checkpoint_for_model = torch.load('saved/NatashaSegmentation/model_best-resnet-34-bce-0.0065.pth.tar')
     model.load_state_dict(checkpoint_for_model['state_dict'])
     model.eval()
 

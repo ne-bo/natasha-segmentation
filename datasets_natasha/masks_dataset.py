@@ -20,7 +20,7 @@ from albumentations import (
 
 def strong_aug(p=.5, config=None):
     return Compose([
-        HorizontalFlip(),
+        # HorizontalFlip(),
         # OneOf([
         #     IAAAdditiveGaussianNoise(),
         #     GaussNoise(),
@@ -30,7 +30,7 @@ def strong_aug(p=.5, config=None):
         #     MedianBlur(blur_limit=3, p=.1),
         #     Blur(blur_limit=3, p=.1),
         # ], p=0.2),
-        ShiftScaleRotate(shift_limit=0.001, scale_limit=0.1, rotate_limit=10, p=.2),
+        ShiftScaleRotate(shift_limit=0.001, scale_limit=0.1, rotate_limit=20, p=.2),
         # Compose([
         #     OpticalDistortion(p=0.3),
         #     GridDistortion(p=.1),
@@ -95,12 +95,9 @@ class ImagesWithMasksDataset(Dataset):
         return len(self.images)
 
     def __getitem__(self, index):
-        if index % 10000 == 0:
-            print('index ', index)
-
         image = Image.open(self.images[index]).convert('RGB')
 
-        if self.config['resize_128']:
+        if self.config['resize_128'] and image.width == 101:
             pad_up_to_128 = transforms.Pad(padding=(14, 27, 13, 0), padding_mode='reflect')
             # pad_up_to_128 = transforms.Pad(padding=(14, 14, 13, 13), padding_mode='reflect')
             image = pad_up_to_128(image)
@@ -109,34 +106,32 @@ class ImagesWithMasksDataset(Dataset):
         depth = self.depths[index]
         mask = self.masks[index]
 
-        whatever_data = "my name"
         if self.name == 'train':
             augmentation = strong_aug(p=0.5, config=self.config)
         else:
             augmentation = tta_aug(p=0.5, config=self.config)
 
-        data = {"image": image, "mask": mask, "whatever_data": whatever_data, "additional": "hello"}
+        data = {"image": image, "mask": mask}
         augmented = augmentation(**data)
-        image, mask, whatever_data, additional = augmented["image"], augmented["mask"], \
-                                                 augmented["whatever_data"], \
-                                                 augmented["additional"]
+        image, mask = augmented["image"], augmented["mask"]
+
+        # print('augmented ', augmented)
+        # img_to_save = Image.fromarray(image)
+        # mask_to_save = Image.fromarray(255 * mask.astype(np.uint8))
+        # img_to_save.save('/home/natasha/salt/aug/images/' + str(index) + '.png')
+        # mask_to_save.save('/home/natasha/salt/aug/masks/' + str(index) + '.png')
+        # print('saved! ', index)
+        # with open('/home/natasha/salt/aug.csv', 'a+') as csv:
+        #     #print('depth ', depth[])
+        #     csv.write('%s,%f\n' % (str(index), int(depth[0, 0])))
 
         image = transforms.ToTensor()(image).float()
         mask = torch.from_numpy(mask).float().unsqueeze(dim=0)
         depth = torch.from_numpy(depth).float().unsqueeze(dim=0)
         image_with_depth_and_mask = torch.cat((image, depth, mask), dim=0)
 
-        # if self.name == 'train':
-        #     image_with_depth_and_mask = random_crop(image_with_depth_and_mask)
-        # image_with_depth_and_mask = flip_h_w(image_with_depth_and_mask, direction='horizontal')
-            # we should not use vertical flips because ofthe data'snature
-            # https://www.kaggle.com/c/tgs-salt-identification-challenge/discussion/61998
-            # image_with_depth_and_mask = flip_h_w(image_with_depth_and_mask, direction='vertical')
-
         image_with_depth = image_with_depth_and_mask[:4]
         mask = image_with_depth_and_mask[-1]
-        # print('image_with_depth ', image_with_depth.shape)
-        # print('self.masks[index] ', mask, mask.shape)
         return image_with_depth, mask
 
     def get_images_with_masks(self):
@@ -164,7 +159,7 @@ class ImagesWithMasksDataset(Dataset):
             rows = list(reader)
             for i, row in tqdm(enumerate(rows[1:])):
                 images.append(row[0] + '.png')
-        print('test images ', images)
+        # print('test images ', images)
         depths = np.ones((len(images), self.image_size, self.image_size), dtype=float)
         for i, image in enumerate(images):
             image_id = image.replace(self.config['data_loader']['data_dir_test'], '').replace('.png', '')
@@ -174,7 +169,7 @@ class ImagesWithMasksDataset(Dataset):
 
     def get_train_images_from_csv(self):
         images = os.listdir(self.config['data_loader']['data_dir_train'])
-        print('train images ', images)
+        # print('train images ', images)
 
         masks = np.zeros((len(images), self.image_size, self.image_size))
         depths = np.ones((len(images), self.image_size, self.image_size))
@@ -185,11 +180,12 @@ class ImagesWithMasksDataset(Dataset):
             rows_mask = list(reader_mask)
             for i, row in tqdm(enumerate(rows_mask[1:])):
                 image_id = row[0]
+                #print('image id',image_id)
                 images.append(os.path.join(self.config['data_loader']['data_dir_train'], image_id + '.png'))
                 depths[i] = self.all_depths[image_id] * depths[i]
 
                 mask_as_image = Image.open(images[i].replace('images', 'masks')).convert('RGB')
-                if self.config['resize_128']:
+                if self.config['resize_128'] and mask_as_image.width == 101:
                     pad_up_to_128 = transforms.Pad(padding=(14, 27, 13, 0), padding_mode='reflect')
                     mask_as_image = pad_up_to_128(mask_as_image)
                 # if self.config['resize_128']:

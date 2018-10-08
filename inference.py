@@ -63,6 +63,8 @@ def save_inference_results_on_disk(loader, network, name):
 
         if config['resize_128']:
             outputs = network(images_themselves, depths).detach()
+
+
         else:
             size_patch = config['patch_size']
             size_37 = size_101 - size_patch

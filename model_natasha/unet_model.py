@@ -1,7 +1,84 @@
 # full assembly of the sub-parts to form the complete net
+import pretrainedmodels
 import torchvision
 
 from .unet_parts import *
+
+
+class CSE(nn.Module):
+    def __init__(self, in_ch, r):
+        super(CSE, self).__init__()
+
+        self.linear_1 = nn.Linear(in_ch, in_ch // r)
+        self.linear_2 = nn.Linear(in_ch // r, in_ch)
+
+    def forward(self, x):
+        input_x = x
+
+        x = x.view(*(x.shape[:-2]), -1).mean(-1)
+        x = F.relu(self.linear_1(x), inplace=True)
+        x = self.linear_2(x)
+        x = x.unsqueeze(-1).unsqueeze(-1)
+        x = F.sigmoid(x)
+        x = input_x * x
+
+        return x
+
+
+class SSE(nn.Module):
+    def __init__(self, in_ch):
+        super(SSE, self).__init__()
+
+        self.conv = nn.Conv2d(in_ch, 1, kernel_size=1, stride=1)
+
+    def forward(self, x):
+        input_x = x
+
+        x = self.conv(x)
+        x = F.sigmoid(x)
+
+        x = input_x * x
+
+        return x
+
+
+class SCSE(nn.Module):
+    def __init__(self, in_ch, r):
+        super(SCSE, self).__init__()
+
+        self.cSE = CSE(in_ch, r)
+        self.sSE = SSE(in_ch)
+
+    def forward(self, x):
+        cSE = self.cSE(x)
+        sSE = self.sSE(x)
+
+        x = cSE + sSE
+
+        return x
+
+
+class SqEx(nn.Module):
+
+    def __init__(self, n_features, reduction=16):
+        super(SqEx, self).__init__()
+
+        if n_features % reduction != 0:
+            raise ValueError('n_features must be divisible by reduction (default = 16)')
+
+        self.linear1 = nn.Linear(n_features, n_features // reduction, bias=True)
+        self.nonlin1 = nn.ReLU(inplace=True)
+        self.linear2 = nn.Linear(n_features // reduction, n_features, bias=True)
+        self.nonlin2 = nn.Sigmoid()
+
+    def forward(self, x):
+        y = F.avg_pool2d(x, kernel_size=x.size()[2:4])
+        y = y.permute(0, 2, 3, 1)
+        y = self.nonlin1(self.linear1(y))
+        y = self.nonlin2(self.linear2(y))
+        y = y.permute(0, 3, 1, 2)
+        y = x * y
+        return y
 
 
 class ConvBnRelu(nn.Module):
@@ -323,6 +400,19 @@ class UNetResNet(nn.Module):
         self.num_classes = num_classes
         self.dropout_2d = dropout_2d
 
+        # self.sqex1 = SCSE(in_ch=64, r=16)
+        # self.sqex2 = SCSE(in_ch=256, r=16)
+        # self.sqex3 = SCSE(in_ch=512, r=16)
+        # self.sqex4 = SCSE(in_ch=1024, r=16)
+        # self.sqex5 = SCSE(in_ch=2048, r=16)
+        #
+        # self.sqex_d5 = SCSE(in_ch=256, r=16)
+        # self.sqex_d4 = SCSE(in_ch=256, r=16)
+        # self.sqex_d3 = SCSE(in_ch=64, r=16)
+        # self.sqex_d2 = SCSE(in_ch=128, r=16)
+        # self.sqex_d1 = SCSE(in_ch=32, r=16)
+        # self.sqex_d0 = SCSE(in_ch=32, r=16)
+
         if encoder_depth == 34:
             self.encoder = torchvision.models.resnet34(pretrained=pretrained)
             bottom_channel_nr = 512
@@ -330,10 +420,13 @@ class UNetResNet(nn.Module):
             self.encoder = torchvision.models.resnet101(pretrained=pretrained)
             bottom_channel_nr = 2048
         elif encoder_depth == 152:
-            self.encoder = torchvision.models.resnet152(pretrained=pretrained)
+            # self.encoder = torchvision.models.resnet152(pretrained=pretrained)
+            self.encoder = pretrainedmodels.se_resnet152(pretrained='imagenet')
             bottom_channel_nr = 2048
         else:
             raise NotImplementedError('only 34, 101, 152 version of Resnet are implemented')
+
+        print(self.encoder)
 
         self.pool = nn.MaxPool2d(2, 2)
 
@@ -343,6 +436,11 @@ class UNetResNet(nn.Module):
                                    self.encoder.bn1,
                                    self.encoder.relu,
                                    self.pool)
+
+        # self.conv1 = nn.Sequential(self.encoder.layer0.conv1,
+        #                            self.encoder.layer0.bn1,
+        #                            self.encoder.layer0.relu1,
+        #                            self.pool)
 
         self.conv2 = self.encoder.layer1
 
@@ -372,11 +470,24 @@ class UNetResNet(nn.Module):
         self.final = nn.Conv2d(num_filters, num_classes, kernel_size=1)
 
     def forward(self, x, depth=None):
-        conv1 = self.conv1(x)
-        conv2 = self.conv2(conv1)
-        conv3 = self.conv3(conv2)
-        conv4 = self.conv4(conv3)
-        conv5 = self.conv5(conv4)
+        conv1 = self.conv1(x)  # self.sqex1()
+        conv2 = self.conv2(conv1)  # self.sqex2()
+        conv3 = self.conv3(conv2)  # self.sqex3()
+        conv4 = self.conv4(conv3)  # self.sqex4()
+        conv5 = self.conv5(conv4)  # self.sqex5()
+
+        # x
+        # torch.Size([48, 3, 128, 128])
+        # conv1
+        # torch.Size([48, 64, 32, 32])
+        # conv2
+        # torch.Size([48, 256, 32, 32])
+        # conv3
+        # torch.Size([48, 512, 16, 16])
+        # conv4
+        # torch.Size([48, 1024, 8, 8])
+        # conv5
+        # torch.Size([48, 2048, 4, 4])
 
         if depth is not None:
             depth_layer = depth.unsqueeze(dim=1)[:, :, :conv5.shape[2], :conv5.shape[3]]
@@ -387,12 +498,31 @@ class UNetResNet(nn.Module):
         center = self.center(pool)
 
         dec5 = self.dec5(torch.cat([center, conv5], 1))
-
         dec4 = self.dec4(torch.cat([dec5, conv4], 1))
         dec3 = self.dec3(torch.cat([dec4, conv3], 1))
         dec2 = self.dec2(torch.cat([dec3, conv2], 1))
         dec1 = self.dec1(dec2)
         dec0 = self.dec0(dec1)
+
+        # dec5 = self.sqex_d5(self.dec5(torch.cat([center, conv5], 1)) )
+        # dec4 = self.sqex_d4(self.dec4(torch.cat([dec5, conv4], 1))   )
+        # dec3 = self.sqex_d3(self.dec3(torch.cat([dec4, conv3], 1))   )
+        # dec2 = self.sqex_d2(self.dec2(torch.cat([dec3, conv2], 1))   )
+        # dec1 = self.sqex_d1(self.dec1(dec2)                          )
+        # dec0 = self.sqex_d0(self.dec0(dec1)                          )
+
+        # dec5
+        # torch.Size([48, 256, 8, 8])
+        # dec4
+        # torch.Size([48, 256, 16, 16])
+        # dec3
+        # torch.Size([48, 64, 32, 32])
+        # dec2
+        # torch.Size([48, 128, 64, 64])
+        # dec1
+        # torch.Size([48, 32, 128, 128])
+        # dec0
+        # torch.Size([48, 32, 128, 128])
 
         return self.final(F.dropout2d(dec0, p=self.dropout_2d))
 

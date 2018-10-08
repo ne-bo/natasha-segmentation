@@ -51,6 +51,7 @@ class BaseTrainer:
 
         assert self.monitor_mode == 'min' or self.monitor_mode == 'max'
         self.monitor_best = math.inf if self.monitor_mode == 'min' else -math.inf
+
         self.start_epoch = 1
         self.checkpoint_dir = os.path.join(config['trainer']['save_dir'], self.name)
         ensure_dir(self.checkpoint_dir)
@@ -58,6 +59,8 @@ class BaseTrainer:
                   indent=4, sort_keys=False)
         if resume:
             self._resume_checkpoint(resume)
+            torch.cuda.empty_cache()
+        print('self.monitor_best = ', self.monitor_best)
 
     def train(self):
         """
@@ -81,14 +84,25 @@ class BaseTrainer:
             if self.train_logger is not None:
                 self.train_logger.add_entry(log)
                 if self.verbosity >= 1:
-                    for key, value in log.items():
-                        self.logger.info('    {:15s}: {}'.format(str(key), value))
+                    self.logger.info(log)
+                    # for key, value in log.items():
+                    #     self.logger.info('    {:15s}: {}'.format(str(key), value))
+
+            if epoch == 200:
+                print('self.monitor_best = ', self.monitor_best)
+                self.monitor_best = 1.0
+                print('self.monitor_best = ', self.monitor_best)
+
             if (self.monitor_mode == 'min' and log[self.monitor] < self.monitor_best) \
                     or (self.monitor_mode == 'max' and log[self.monitor] > self.monitor_best):
                 self.monitor_best = log[self.monitor]
-                self._save_checkpoint(epoch, log, save_best=True)
+                if epoch < 200:
+                    self._save_checkpoint(epoch, log, save_best=True)
+                else:
+                    self._save_checkpoint(epoch, log, save_best=True, save_with_name=True)
             if epoch % self.save_freq == 0:
                 self._save_checkpoint(epoch, log)
+                torch.cuda.empty_cache()
             if self.lr_scheduler and epoch % self.lr_scheduler_freq == 0:
                 if self.config['lr_scheduler_type'] == 'ReduceLROnPlateau':
                     self.lr_scheduler.step(log[self.monitor], epoch)
@@ -105,7 +119,7 @@ class BaseTrainer:
         """
         raise NotImplementedError
 
-    def _save_checkpoint(self, epoch, log, save_best=False):
+    def _save_checkpoint(self, epoch, log, save_best=False, save_with_name=False):
         """
         Saving checkpoints
 
@@ -126,9 +140,15 @@ class BaseTrainer:
         filename = os.path.join(self.checkpoint_dir, 'checkpoint-epoch{:03d}-loss-{:.4f}.pth.tar'
                                 .format(epoch, log['loss']))
         torch.save(state, filename)
+        torch.cuda.empty_cache()
         if save_best:
-            os.rename(filename, os.path.join(self.checkpoint_dir, 'model_best.pth.tar'))
-            self.logger.info("Saving current best: {} ...".format('model_best.pth.tar'))
+            if save_with_name:
+                os.rename(filename, os.path.join(self.checkpoint_dir, 'model_best_lovasz.pth.tar'))
+                self.logger.info("Saving current best: {} ...".format('model_best_lovasz.pth.tar'))
+            else:
+                os.rename(filename, os.path.join(self.checkpoint_dir, 'model_best.pth.tar'))
+                self.logger.info("Saving current best: {} ...".format('model_best.pth.tar'))
+
         else:
             self.logger.info("Saving checkpoint: {} ...".format(filename))
 
@@ -141,6 +161,8 @@ class BaseTrainer:
         self.logger.info("Loading checkpoint: {} ...".format(resume_path))
         checkpoint = torch.load(resume_path)
         self.start_epoch = checkpoint['epoch'] + 1
+        if self.start_epoch == 200:
+            self.start_epoch = 1
         self.monitor_best = checkpoint['monitor_best']
         self.model.load_state_dict(checkpoint['state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
@@ -152,3 +174,5 @@ class BaseTrainer:
         self.train_logger = checkpoint['logger']
         self.config = checkpoint['config']
         self.logger.info("Checkpoint '{}' (epoch {}) loaded".format(resume_path, self.start_epoch))
+        checkpoint = None
+        torch.cuda.empty_cache()
